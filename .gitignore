@@ -1,0 +1,24 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.env
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Dataset and generated artifacts
+data/
+artifacts/embeddings/
+artifacts/indexes/
+
+# Model weights and deployment engines
+*.pt
+*.pth
+*.onnx
+*.engine
+
+# OS
+.DS_Store
+Thumbs.db
