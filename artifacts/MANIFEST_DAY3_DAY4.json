@@ -1,0 +1,40 @@
+{
+  "created_at": "2026-10-17T19:00:59.170417",
+  "pipeline": "Unified Day 3 + Day 4 — MURE v5 + Dual-EKMA (>90% Benchmark Target)",
+  "models": [
+    "FashionCLIP (0.7)",
+    "ViT-B/32-laion (0.3)",
+    "Dual_EKMA_1024"
+  ],
+  "best_config": {
+    "algorithm": "MURE_v5_Dual_EKMA",
+    "embedding_dim": 1024,
+    "fusion": {
+      "alpha_fashionclip": 0.7,
+      "beta_vitb32": 0.3
+    },
+    "rerank": {
+      "n_retrieve": 1000,
+      "w_cat": 0.08,
+      "w_main": 0.1,
+      "w_other": 0.08,
+      "w_other_per_token": 0.02,
+      "w_sig": 0.1,
+      "anchor_sibling_promotion": 0.88
+    },
+    "i2i_overall": {
+      "Recall@1": 88.08,
+      "Recall@5": 95.74,
+      "Recall@10": 99.29,
+      "mAP@10": 90.66,
+      "NDCG@10": 92.77
+    },
+    "t2i_overall": {
+      "Recall@1": 87.98,
+      "Recall@5": 95.53,
+      "Recall@10": 99.14,
+      "mAP@10": 90.64,
+      "NDCG@10": 92.71
+    }
+  }
+}

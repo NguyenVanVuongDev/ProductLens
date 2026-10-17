@@ -10,8 +10,6 @@ venv/
 
 # Dataset and generated artifacts
 data/
-artifacts/embeddings/
-artifacts/indexes/
 
 # Model weights and deployment engines
 *.pt

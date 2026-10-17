@@ -1,0 +1,29 @@
+============================= test session starts ==============================
+platform linux -- Python 3.13.15, pytest-8.4.2, pluggy-1.6.0 -- /usr/bin/python3
+cachedir: .pytest_cache
+rootdir: /kaggle/working
+plugins: typeguard-4.6.0, anyio-4.14.2, langsmith-0.12.1
+collecting ... collected 20 items
+
+fashion_search_backend/tests/test_backend.py::test_encoder_text_shape_and_norm PASSED [  5%]
+fashion_search_backend/tests/test_backend.py::test_encoder_text_rejects_empty PASSED [ 10%]
+fashion_search_backend/tests/test_backend.py::test_encoder_image_shape_and_norm PASSED [ 15%]
+fashion_search_backend/tests/test_backend.py::test_encoder_image_rejects_corrupted PASSED [ 20%]
+fashion_search_backend/tests/test_backend.py::test_encoder_image_rejects_too_small PASSED [ 25%]
+fashion_search_backend/tests/test_backend.py::test_mapping_consistency PASSED [ 30%]
+fashion_search_backend/tests/test_backend.py::test_mapping_out_of_bounds PASSED [ 35%]
+fashion_search_backend/tests/test_backend.py::test_index_dimension_mismatch PASSED [ 40%]
+fashion_search_backend/tests/test_backend.py::test_index_nan_vector PASSED [ 45%]
+fashion_search_backend/tests/test_backend.py::test_rerank_boosts_matching_category PASSED [ 50%]
+fashion_search_backend/tests/test_backend.py::test_health PASSED         [ 55%]
+fashion_search_backend/tests/test_backend.py::test_search_text_no_meta PASSED [ 60%]
+fashion_search_backend/tests/test_backend.py::test_search_text_with_meta PASSED [ 65%]
+fashion_search_backend/tests/test_backend.py::test_search_text_empty_rejected PASSED [ 70%]
+fashion_search_backend/tests/test_backend.py::test_search_text_invalid_top_k PASSED [ 75%]
+fashion_search_backend/tests/test_backend.py::test_search_image_success PASSED [ 80%]
+fashion_search_backend/tests/test_backend.py::test_search_image_with_meta PASSED [ 85%]
+fashion_search_backend/tests/test_backend.py::test_search_image_invalid_upload PASSED [ 90%]
+fashion_search_backend/tests/test_backend.py::test_get_product_ok_and_404 PASSED [ 95%]
+fashion_search_backend/tests/test_backend.py::test_endpoint_index_unavailable PASSED [100%]
+
+============================= 20 passed in 33.01s ==============================
