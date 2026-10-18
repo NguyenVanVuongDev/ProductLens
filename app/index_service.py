@@ -1,4 +1,6 @@
 import os
+from functools import lru_cache
+from pathlib import Path
 from typing import Dict, Optional
 import numpy as np
 import pandas as pd
@@ -14,17 +16,26 @@ class VectorIDMapper:
             raise ValueError("Catalog phải có cột 'faiss_id' và 'product_id'.")
         self._f2m: Dict[int, dict] = {}
         self._p2m: Dict[str, dict] = {}
+        self._gallery_positions: Dict[str, int] = {}
+        gallery_occurrences: Dict[tuple, int] = {}
         for r in catalog_df.to_dict(orient="records"):
             fid = int(r["faiss_id"])
             pid = str(r["product_id"])
+            subset = str(r.get("subset", ""))
+            item_id = int(r.get("item_ID", -1))
+            gallery_key = (subset, item_id)
+            self._gallery_positions[pid] = gallery_occurrences.get(gallery_key, 0)
+            gallery_occurrences[gallery_key] = self._gallery_positions[pid] + 1
             item = {
                 "product_id": pid,
                 "faiss_id": fid,
-                "item_ID": int(r.get("item_ID", -1)),
-                "subset": str(r.get("subset", "")),
+                "item_ID": item_id,
+                "subset": subset,
                 "category": str(r.get("category", "")),
                 "main_attribute": str(r.get("main_attribute", "")),
                 "other_attributes": str(r.get("other_attributes", "")),
+                "title": "" if pd.isna(r.get("title", "")) else str(r.get("title", "")),
+                "image_path": "" if pd.isna(r.get("image_path", "")) else str(r.get("image_path", "")),
             }
             self._f2m[fid] = item
             self._p2m[pid] = item
@@ -43,11 +54,17 @@ class VectorIDMapper:
             raise KeyError(f"Không tìm thấy product_id='{product_id}'.")
         return self._p2m[product_id]
 
+    def get_gallery_position(self, product_id: str) -> int:
+        if product_id not in self._gallery_positions:
+            raise KeyError(f"Không tìm thấy product_id='{product_id}'.")
+        return self._gallery_positions[product_id]
+
 
 class FAISSIndexService:
     """Dịch vụ tìm kiếm FAISS tích hợp MURE v5 Reranker."""
 
-    def __init__(self, index_path: str, catalog_path: str, rerank_cfg: Optional[dict] = None):
+    def __init__(self, index_path: str, catalog_path: str, rerank_cfg: Optional[dict] = None,
+                 gallery_root: Optional[str] = None, image_root: Optional[str] = None):
         if not os.path.exists(index_path):
             raise IndexTrapError(f"Không tìm thấy index: {index_path}")
         if not os.path.exists(catalog_path):
@@ -60,6 +77,10 @@ class FAISSIndexService:
 
         catalog_df = pd.read_parquet(catalog_path)
         self.mapper = VectorIDMapper(catalog_df)
+        self.gallery_root = Path(
+            gallery_root or os.path.join(os.path.dirname(catalog_path), "v20251201")
+        ).resolve()
+        self.image_root = Path(image_root or os.path.dirname(catalog_path)).resolve()
 
         if self.index.ntotal == 0:
             raise IndexTrapError("FAISS index rỗng.")
@@ -88,6 +109,46 @@ class FAISSIndexService:
     @property
     def is_ready(self) -> bool:
         return self.index is not None and self.index.ntotal > 0
+
+    @lru_cache(maxsize=128)
+    def get_product_image(self, product_id: str) -> bytes:
+        metadata = self.mapper.get_by_product_id(product_id)
+        image_path = metadata.get("image_path", "")
+        if image_path:
+            candidate = Path(image_path)
+            if not candidate.is_absolute():
+                candidate = self.image_root / candidate
+            candidate = candidate.resolve()
+            if self.image_root not in candidate.parents or not candidate.is_file():
+                raise FileNotFoundError(f"Không tìm thấy ảnh cục bộ cho product_id='{product_id}'.")
+            return candidate.read_bytes()
+
+        gallery_path = (self.gallery_root / metadata["subset"] / "gallery.parquet").resolve()
+        if self.gallery_root not in gallery_path.parents or not gallery_path.is_file():
+            raise FileNotFoundError(f"Gallery không tồn tại cho product_id='{product_id}'.")
+
+        rows = pd.read_parquet(
+            gallery_path,
+            columns=["item_ID", "image"],
+            filters=[("item_ID", "==", str(metadata["item_ID"]))],
+        )
+        position = self.mapper.get_gallery_position(product_id)
+        if position >= len(rows):
+            raise KeyError(f"Không tìm thấy ảnh cho product_id='{product_id}'.")
+
+        image = rows.iloc[position]["image"]
+        image_bytes = image.get("bytes") if isinstance(image, dict) else None
+        if image_bytes:
+            return bytes(image_bytes)
+
+        image_path = image.get("path") if isinstance(image, dict) else None
+        if image_path:
+            path = Path(image_path)
+            if not path.is_absolute():
+                path = gallery_path.parent / path
+            if path.is_file():
+                return path.read_bytes()
+        raise KeyError(f"Ảnh không có dữ liệu cho product_id='{product_id}'.")
 
     def _rerank(self, cand_idx: np.ndarray, cand_scores: np.ndarray, query_meta: dict) -> tuple:
         if query_meta is None:

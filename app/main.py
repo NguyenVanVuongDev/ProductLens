@@ -1,14 +1,27 @@
 import os
 from fastapi import FastAPI, File, UploadFile, Query, HTTPException, Request
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
+from PIL import Image
+import io
 from app.schemas import TextSearchRequest, SearchResponse, ProductMetadata, HealthResponse
 from app.encoder import EnsembleCLIPEncoder
 from app.index_service import FAISSIndexService
 from app.exceptions import InvalidQueryError, InvalidImageError, IndexTrapError, VectorIDMappingError
 
-DEFAULT_DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data")
-INDEX_PATH   = os.getenv("FAISS_INDEX_PATH",   os.path.join(DEFAULT_DATA_DIR, "lookbench_gallery_hnsw_m16.faiss"))
-CATALOG_PATH = os.getenv("PRODUCT_CATALOG_PATH", os.path.join(DEFAULT_DATA_DIR, "product_catalog.parquet"))
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+INDEX_PATH = os.getenv(
+    "FAISS_INDEX_PATH",
+    os.path.join(PROJECT_ROOT, "artifacts", "indexes", "lookbench_gallery_hnsw_m16.faiss"),
+)
+CATALOG_PATH = os.getenv(
+    "PRODUCT_CATALOG_PATH",
+    os.path.join(PROJECT_ROOT, "data", "lookbench", "product_catalog.parquet"),
+)
+DATA_ROOT = os.getenv("DATA_ROOT", os.path.join(PROJECT_ROOT, "data"))
+GALLERY_ROOT = os.getenv(
+    "LOOKBENCH_GALLERY_ROOT",
+    os.path.join(os.path.dirname(CATALOG_PATH), "v20251201"),
+)
 
 
 def create_app(encoder: EnsembleCLIPEncoder = None, index_service: FAISSIndexService = None) -> FastAPI:
@@ -19,7 +32,9 @@ def create_app(encoder: EnsembleCLIPEncoder = None, index_service: FAISSIndexSer
     )
 
     app.state.encoder = encoder or EnsembleCLIPEncoder()
-    app.state.index_service = index_service or FAISSIndexService(INDEX_PATH, CATALOG_PATH)
+    app.state.index_service = index_service or FAISSIndexService(
+        INDEX_PATH, CATALOG_PATH, gallery_root=GALLERY_ROOT, image_root=DATA_ROOT
+    )
 
     @app.exception_handler(InvalidQueryError)
     async def _h1(_: Request, exc: InvalidQueryError):
@@ -105,6 +120,23 @@ def create_app(encoder: EnsembleCLIPEncoder = None, index_service: FAISSIndexSer
             return ProductMetadata(**idx.mapper.get_by_product_id(product_id))
         except KeyError as exc:
             raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+    @app.get("/products/{product_id}/image", response_class=Response)
+    async def get_product_image(product_id: str):
+        idx: FAISSIndexService = app.state.index_service
+        if idx is None or not idx.is_ready:
+            raise IndexTrapError("Product catalog chưa sẵn sàng.")
+        try:
+            image_bytes = idx.get_product_image(product_id)
+        except (KeyError, FileNotFoundError) as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+        try:
+            with Image.open(io.BytesIO(image_bytes)) as image:
+                media_type = Image.MIME.get(image.format, "application/octet-stream")
+        except (OSError, ValueError) as exc:
+            raise HTTPException(status_code=500, detail="Ảnh gallery không hợp lệ.") from exc
+        return Response(content=image_bytes, media_type=media_type)
 
     return app
 

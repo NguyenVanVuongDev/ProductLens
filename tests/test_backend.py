@@ -188,6 +188,39 @@ def test_get_product_ok_and_404(client, shared_index_service):
     assert client.get("/products/nope_999").status_code == 404
 
 
+def test_get_product_image_ok_and_404(client, shared_index_service):
+    pid = shared_index_service.mapper.get_by_faiss_id(0)["product_id"]
+    response = client.get(f"/products/{pid}/image")
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("image/")
+    Image.open(io.BytesIO(response.content)).verify()
+
+    first_duplicate = shared_index_service.mapper.get_by_faiss_id(1)["product_id"]
+    second_duplicate = shared_index_service.mapper.get_by_faiss_id(2)["product_id"]
+    first_image = client.get(f"/products/{first_duplicate}/image")
+    second_image = client.get(f"/products/{second_duplicate}/image")
+    assert first_image.status_code == second_image.status_code == 200
+    assert first_image.content != second_image.content
+    assert client.get("/products/nope_999/image").status_code == 404
+
+
+def test_get_product_image_from_local_catalog_path(client, shared_index_service, tmp_path, monkeypatch):
+    pid = shared_index_service.mapper.get_by_faiss_id(0)["product_id"]
+    local_image = tmp_path / "preview.png"
+    Image.new("RGB", (24, 24), color=(10, 20, 30)).save(local_image)
+    metadata = dict(shared_index_service.mapper.get_by_product_id(pid), image_path="preview.png")
+    monkeypatch.setattr(shared_index_service, "image_root", tmp_path)
+    monkeypatch.setitem(shared_index_service.mapper._p2m, pid, metadata)
+    shared_index_service.get_product_image.cache_clear()
+    try:
+        response = client.get(f"/products/{pid}/image")
+        assert response.status_code == 200
+        assert response.headers["content-type"].startswith("image/")
+        Image.open(io.BytesIO(response.content)).verify()
+    finally:
+        shared_index_service.get_product_image.cache_clear()
+
+
 def test_endpoint_index_unavailable(shared_encoder, shared_index_service):
     app = create_app(encoder=shared_encoder, index_service=shared_index_service)
     app.state.index_service = None

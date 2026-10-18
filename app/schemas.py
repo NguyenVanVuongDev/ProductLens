@@ -35,6 +35,8 @@ class ProductMetadata(BaseModel):
     category: str
     main_attribute: str
     other_attributes: Optional[str] = ""
+    title: Optional[str] = ""
+    image_path: Optional[str] = ""
 
 
 class SearchResultItem(BaseModel):
