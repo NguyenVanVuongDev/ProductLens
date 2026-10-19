@@ -1,9 +1,33 @@
 {
-  "algorithm": "MURE_v5_Dual_EKMA",
+  "algorithm": "MURE_v6_Inductive_Dual_EKMA_Leakage_Free",
+  "evaluation_protocol": "Stratified Split: Train 60% (1407) / Val 20% (469) / Held-out Test 20% (469)",
   "embedding_dim": 1024,
   "fusion": {
     "alpha_fashionclip": 0.7,
     "beta_vitb32": 0.3
+  },
+  "domain_centering": {
+    "gamma_center": 0.45,
+    "mean_img_file": "domain_centering_mean_img.npy",
+    "mean_txt_file": "domain_centering_mean_txt.npy",
+    "means_npz_file": "domain_centering_means.npz"
+  },
+  "dual_ekma": {
+    "W_QI_file": "dual_ekma_W_QI.npy",
+    "W_QT_file": "dual_ekma_W_QT.npy",
+    "transform_pkl_file": "transform_pipeline.pkl",
+    "best_tau_i2i_val": {
+      "aigen_streetlook": 0.38,
+      "aigen_studio": 0.0,
+      "real_streetlook": 0.5,
+      "real_studio_flat": 0.24
+    },
+    "best_tau_t2i_val": {
+      "aigen_streetlook": 0.5,
+      "aigen_studio": 0.08,
+      "real_streetlook": 0.36,
+      "real_studio_flat": 0.44
+    }
   },
   "rerank": {
     "n_retrieve": 1000,
@@ -14,18 +38,18 @@
     "w_sig": 0.1,
     "anchor_sibling_promotion": 0.88
   },
-  "i2i_overall": {
-    "Recall@1": 88.08,
-    "Recall@5": 95.74,
-    "Recall@10": 99.29,
-    "mAP@10": 90.66,
-    "NDCG@10": 92.77
+  "i2i_heldout_test_overall": {
+    "Recall@1": 75.5,
+    "Recall@5": 86.6,
+    "Recall@10": 92.77,
+    "mAP@10": 79.87,
+    "NDCG@10": 82.83
   },
-  "t2i_overall": {
-    "Recall@1": 87.98,
-    "Recall@5": 95.53,
-    "Recall@10": 99.14,
-    "mAP@10": 90.64,
-    "NDCG@10": 92.71
+  "t2i_heldout_test_overall": {
+    "Recall@1": 90.09,
+    "Recall@5": 92.52,
+    "Recall@10": 94.32,
+    "mAP@10": 76.87,
+    "NDCG@10": 81.87
   }
 }

@@ -14,6 +14,17 @@ class VectorIDMapper:
     def __init__(self, catalog_df: pd.DataFrame):
         if "faiss_id" not in catalog_df.columns or "product_id" not in catalog_df.columns:
             raise ValueError("Catalog phải có cột 'faiss_id' và 'product_id'.")
+        if catalog_df["faiss_id"].isna().any() or catalog_df["product_id"].isna().any():
+            raise ValueError("Catalog không được chứa FAISS ID hoặc product ID rỗng.")
+        faiss_ids = pd.to_numeric(catalog_df["faiss_id"], errors="coerce")
+        if faiss_ids.isna().any() or faiss_ids.duplicated().any():
+            raise ValueError("Catalog chứa FAISS ID không hợp lệ hoặc trùng lặp.")
+        if not np.array_equal(faiss_ids.to_numpy(), faiss_ids.astype(np.int64).to_numpy()):
+            raise ValueError("FAISS ID trong catalog phải là số nguyên.")
+        if set(faiss_ids.astype(np.int64)) != set(range(len(catalog_df))):
+            raise ValueError("FAISS ID trong catalog phải liên tục từ 0 đến N-1.")
+        if catalog_df["product_id"].astype(str).duplicated().any():
+            raise ValueError("Catalog chứa product_id trùng lặp.")
         self._f2m: Dict[int, dict] = {}
         self._p2m: Dict[str, dict] = {}
         self._gallery_positions: Dict[str, int] = {}
@@ -76,6 +87,8 @@ class FAISSIndexService:
             raise IndexTrapError(f"Không load được FAISS index: {exc}") from exc
 
         catalog_df = pd.read_parquet(catalog_path)
+        catalog_df["faiss_id"] = pd.to_numeric(catalog_df["faiss_id"], errors="raise").astype(np.int64)
+        catalog_df = catalog_df.sort_values("faiss_id").reset_index(drop=True)
         self.mapper = VectorIDMapper(catalog_df)
         self.gallery_root = Path(
             gallery_root or os.path.join(os.path.dirname(catalog_path), "v20251201")
@@ -84,6 +97,14 @@ class FAISSIndexService:
 
         if self.index.ntotal == 0:
             raise IndexTrapError("FAISS index rỗng.")
+        if self.index.ntotal != len(self.mapper):
+            raise IndexTrapError(
+                f"Lệch đồng bộ Index-Metadata: index.ntotal={self.index.ntotal} != len(catalog)={len(self.mapper)}"
+            )
+        if self.index.metric_type != faiss.METRIC_INNER_PRODUCT:
+            raise IndexTrapError("Index phải dùng inner product trên vector L2-normalized (cosine similarity).")
+        if self.index.d != 1024:
+            raise IndexTrapError(f"Dimension index không hợp lệ: cần 1024, nhận {self.index.d}.")
 
         self._cats = catalog_df["category"].fillna("").astype(str).str.lower().values
         self._mains = catalog_df["main_attribute"].fillna("").astype(str).str.lower().values
@@ -194,19 +215,26 @@ class FAISSIndexService:
             raise IndexTrapError("FAISS index chưa sẵn sàng.")
         if not isinstance(top_k, int) or top_k < 1 or top_k > 50:
             raise ValueError(f"top_k={top_k} không hợp lệ (1..50).")
-        if query_vec is None or query_vec.ndim != 2 or query_vec.shape[0] != 1:
+        if query_vec is None:
+            raise IndexTrapError("Query vector phải có shape (1, dim).")
+        query_vec = np.asarray(query_vec)
+        if query_vec.ndim != 2 or query_vec.shape[0] != 1:
             raise IndexTrapError("Query vector phải có shape (1, dim).")
         if query_vec.shape[1] != self.index.d:
             raise IndexTrapError(f"Lệch dim: query {query_vec.shape[1]} vs index {self.index.d}.")
         if not np.all(np.isfinite(query_vec)):
             raise IndexTrapError("Query vector chứa NaN/Inf.")
+        query_vec = np.ascontiguousarray(query_vec, dtype=np.float32)
+        if float(np.linalg.norm(query_vec)) <= 1e-12:
+            raise IndexTrapError("Query vector có norm bằng 0.")
+        faiss.normalize_L2(query_vec)
 
         n_ret = self.rerank_cfg["n_retrieve"] if use_rerank else top_k
         n_ret = min(n_ret, self.index.ntotal)
 
         try:
             scores, indices = self.index.search(
-                np.ascontiguousarray(query_vec, dtype=np.float32), n_ret
+                query_vec, n_ret
             )
         except Exception as exc:
             raise IndexTrapError(f"Lỗi FAISS: {exc}") from exc

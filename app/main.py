@@ -1,10 +1,11 @@
 import os
+from contextlib import asynccontextmanager
 from fastapi import FastAPI, File, UploadFile, Query, HTTPException, Request
 from fastapi.responses import JSONResponse, Response
 from PIL import Image
 import io
 from app.schemas import TextSearchRequest, SearchResponse, ProductMetadata, HealthResponse
-from app.encoder import EnsembleCLIPEncoder
+from app.encoder import EnsembleCLIPEncoder, MAX_IMAGE_BYTES
 from app.index_service import FAISSIndexService
 from app.exceptions import InvalidQueryError, InvalidImageError, IndexTrapError, VectorIDMappingError
 
@@ -25,16 +26,30 @@ GALLERY_ROOT = os.getenv(
 
 
 def create_app(encoder: EnsembleCLIPEncoder = None, index_service: FAISSIndexService = None) -> FastAPI:
+    @asynccontextmanager
+    async def lifespan(app: FastAPI):
+        if app.state.initialize_runtime:
+            if app.state.encoder is None:
+                app.state.encoder = EnsembleCLIPEncoder()
+            if app.state.index_service is None:
+                app.state.index_service = FAISSIndexService(
+                    INDEX_PATH, CATALOG_PATH, gallery_root=GALLERY_ROOT, image_root=DATA_ROOT
+                )
+            _validate_runtime(app.state.encoder, app.state.index_service)
+        yield
+
     app = FastAPI(
-        title="LookBench Fashion Retrieval API (MURE v5)",
-        version="5.0.0",
-        description="Multimodal visual search với FashionCLIP ⊕ ViT-B/32 + MURE v5 Dual-EKMA Reranker (>90% Benchmark)"
+        title="LookBench Fashion Retrieval API (MURE v6)",
+        version="6.0.0",
+        description="Multimodal visual search với FashionCLIP ⊕ ViT-B/32 và inductive Dual-EKMA.",
+        lifespan=lifespan,
     )
 
-    app.state.encoder = encoder or EnsembleCLIPEncoder()
-    app.state.index_service = index_service or FAISSIndexService(
-        INDEX_PATH, CATALOG_PATH, gallery_root=GALLERY_ROOT, image_root=DATA_ROOT
-    )
+    app.state.encoder = encoder
+    app.state.index_service = index_service
+    app.state.initialize_runtime = encoder is None or index_service is None
+    if encoder is not None and index_service is not None:
+        _validate_runtime(encoder, index_service)
 
     @app.exception_handler(InvalidQueryError)
     async def _h1(_: Request, exc: InvalidQueryError):
@@ -62,6 +77,7 @@ def create_app(encoder: EnsembleCLIPEncoder = None, index_service: FAISSIndexSer
             status="healthy",
             models=[m["tag"] for m in enc.models],
             index_loaded=idx.is_ready,
+            transform_loaded=enc.transform_loaded,
             total_indexed_vectors=int(idx.index.ntotal),
             total_catalog_products=len(idx.mapper),
             embedding_dim=enc.embedding_dim,
@@ -99,7 +115,7 @@ def create_app(encoder: EnsembleCLIPEncoder = None, index_service: FAISSIndexSer
         if idx is None or not idx.is_ready:
             raise IndexTrapError("FAISS index chưa sẵn sàng.")
 
-        raw = await file.read()
+        raw = await file.read(MAX_IMAGE_BYTES + 1)
         q_vec = enc.encode_image_bytes(raw, content_type=file.content_type)
         query_meta = {
             "category": category, "main_attribute": main_attribute,
@@ -139,6 +155,15 @@ def create_app(encoder: EnsembleCLIPEncoder = None, index_service: FAISSIndexSer
         return Response(content=image_bytes, media_type=media_type)
 
     return app
+
+
+def _validate_runtime(encoder: EnsembleCLIPEncoder, index_service: FAISSIndexService) -> None:
+    if index_service.index.d != encoder.embedding_dim:
+        raise IndexTrapError(
+            f"Lệch dimension encoder/index: {encoder.embedding_dim} != {index_service.index.d}."
+        )
+    if not getattr(encoder, "transform_loaded", False):
+        raise RuntimeError("Transform artifacts chưa được nạp; từ chối chạy với embedding raw.")
 
 
 app = create_app()

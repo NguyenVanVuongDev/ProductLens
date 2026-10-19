@@ -43,6 +43,28 @@ def test_encoder_text_shape_and_norm(shared_encoder):
     assert emb.shape == (1, EXPECTED_DIM)
     assert emb.dtype == np.float32
     assert np.isclose(np.linalg.norm(emb), 1.0, atol=1e-5)
+    assert shared_encoder.transform_loaded is True
+
+
+def test_module_app_defers_runtime_loading():
+    from app.main import app
+
+    assert app.state.encoder is None
+    assert app.state.index_service is None
+
+
+def test_lifespan_initializes_runtime(shared_encoder, shared_index_service, monkeypatch):
+    import app.main as main_module
+
+    monkeypatch.setattr(main_module, "EnsembleCLIPEncoder", lambda: shared_encoder)
+    monkeypatch.setattr(
+        main_module,
+        "FAISSIndexService",
+        lambda *args, **kwargs: shared_index_service,
+    )
+    app = main_module.create_app()
+    with TestClient(app) as test_client:
+        assert test_client.get("/health").status_code == 200
 
 
 def test_encoder_text_rejects_empty(shared_encoder):
@@ -93,6 +115,15 @@ def test_index_nan_vector(shared_index_service):
         shared_index_service.search(nan, top_k=5)
 
 
+def test_search_normalizes_query_vectors(shared_index_service):
+    vector = shared_index_service.index.reconstruct(0).reshape(1, -1)
+    normal_hits, _ = shared_index_service.search(vector, top_k=5, use_rerank=False)
+    scaled_hits, _ = shared_index_service.search(vector * 7.0, top_k=5, use_rerank=False)
+    assert [hit["product"]["faiss_id"] for hit in normal_hits] == [
+        hit["product"]["faiss_id"] for hit in scaled_hits
+    ]
+
+
 def test_rerank_boosts_matching_category(shared_index_service):
     vec = np.ascontiguousarray(
         shared_index_service.index.reconstruct(0).reshape(1, -1), dtype=np.float32
@@ -121,6 +152,7 @@ def test_health(client):
     d = r.json()
     assert d["status"] == "healthy"
     assert d["index_loaded"] is True
+    assert d["transform_loaded"] is True
     assert d["embedding_dim"] == EXPECTED_DIM
     assert d["total_indexed_vectors"] == d["total_catalog_products"]
     assert len(d["models"]) == 2

@@ -57,6 +57,7 @@ class HealthResponse(BaseModel):
     status: str
     models: List[str]
     index_loaded: bool
+    transform_loaded: bool
     total_indexed_vectors: int
     total_catalog_products: int
     embedding_dim: int

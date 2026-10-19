@@ -7,14 +7,16 @@ Backend tìm kiếm ảnh thời trang bằng text-to-image và image-to-image. 
 - `app/main.py`: FastAPI `/search/text`, `/search/image`, `/products/{product_id}`, `/products/{product_id}/image` và `/health`.
 - `app/demo.py`: Streamlit UI gọi API, hỗ trợ text/image, top-K, score và metadata.
 - `artifacts/indexes/lookbench_gallery_hnsw_m16.faiss`: index runtime mặc định.
+- `artifacts/embeddings/transform_pipeline.pkl`: transform bundle v6 dùng chung cho text/image query.
+- `artifacts/embeddings/domain_centering_means.npz`, `dual_ekma_W_QI.npy`, `dual_ekma_W_QT.npy`: transform artifacts dạng NumPy để kiểm tra/tái dựng.
 - `data/lookbench/product_catalog.parquet`: catalog runtime mặc định, ánh xạ FAISS ID sang metadata.
 - `notebooks/da1-day-3-day-4.ipynb`: notebook pipeline và đánh giá hiện có.
 
-Index và catalog phải được tạo/cung cấp trước khi khởi chạy API. Docker chỉ đóng gói dịch vụ, không tải dữ liệu hoặc build index trong quá trình startup. Repo hiện chưa có CLI độc lập để tái tạo index từ dữ liệu thô; quy trình tạo artifact vẫn nằm trong notebook. Dữ liệu `data/` và artifact lớn không được đưa vào image.
+Index, catalog và transform v6 phải thuộc cùng một lần build trước khi khởi chạy API. API từ chối khởi động nếu transform thiếu/sai dimension hoặc dimension index không khớp; không fallback âm thầm sang embedding raw. Docker chỉ đóng gói dịch vụ, không tải dữ liệu hoặc build index trong quá trình startup. Repo hiện chưa có CLI độc lập để tái tạo index từ dữ liệu thô; quy trình tạo artifact vẫn nằm trong notebook. Dữ liệu `data/` và artifact lớn không được đưa vào image.
 
 ## Chạy local
 
-Yêu cầu Python 3.11+, đủ dung lượng model/cache, và hai artifact ở đúng đường dẫn mặc định hoặc cấu hình bằng `FAISS_INDEX_PATH` và `PRODUCT_CATALOG_PATH`.
+Yêu cầu Python 3.11+, đủ dung lượng model/cache, và artifacts ở đúng đường dẫn mặc định hoặc cấu hình bằng `FAISS_INDEX_PATH`, `PRODUCT_CATALOG_PATH`, `TRANSFORM_DIR`.
 
 ```powershell
 python -m venv .venv

@@ -1,5 +1,5 @@
-Phương pháp / Cấu hình,I2I R@1 (%),I2I R@5 (%),I2I R@10 (%),I2I mAP@10 (%),I2I NDCG@10 (%),T2I R@10 (%)
-"1. Baseline ViT-B/32 (Zero-Shot, No Rerank)",40.81,62.9,71.09,36.3,44.19,45.67
-2. Ensemble FashionCLIP (0.7) ⊕ ViT-B/32 (0.3) Raw,47.93,70.75,76.97,43.95,52.08,45.71
-3. + Domain Centering + CSLS + Vectorized Hybrid Rerank (Zero-Shot),66.35,78.64,85.67,70.61,74.05,96.03
-4. ★ MURE v5 + Dual-EKMA (Full Pipeline — Đạt >90% mọi chỉ số),84.48,94.58,98.98,88.04,90.74,98.93
+Phương pháp / Cấu hình (Đo trên Held-out Test),I2I R@1 (%),I2I R@5 (%),I2I R@10 (%),I2I mAP@10 (%),I2I NDCG@10 (%),T2I R@10 (%)
+"1. Baseline ViT-B/32 (Zero-Shot, No Rerank)",39.53,59.83,71.58,35.99,43.51,41.67
+2. Ensemble FashionCLIP (0.7) ⊕ ViT-B/32 (0.3) Raw,48.93,70.09,76.92,44.01,51.76,42.09
+3. + Domain Centering + CSLS + Hybrid Rerank (Zero-Shot),67.74,77.99,84.62,71.0,73.96,92.09
+4. ★ MURE v6 + Inductive Dual-EKMA (Held-out Test — Zero Leakage),68.16,80.98,87.82,73.01,76.41,92.74
