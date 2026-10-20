@@ -10,7 +10,7 @@ API_URL = os.getenv("API_URL", "http://127.0.0.1:8000").rstrip("/")
 
 st.set_page_config(page_title="Visual Retrieval Demo", page_icon="🔎", layout="wide")
 st.title("Multimodal Visual Retrieval")
-st.caption("LookBench retrieval API · FashionCLIP + ViT-B/32 ensemble")
+st.caption("LookBench fashion retrieval · FashionCLIP + ViT-B/32 ensemble")
 
 
 def show_results(payload: dict, elapsed: float) -> None:
@@ -57,7 +57,7 @@ with st.sidebar:
 text_tab, image_tab = st.tabs(["Text-to-image", "Image-to-image"])
 with text_tab:
     with st.form("text-search"):
-        query = st.text_input("Mô tả sản phẩm", value="A modern beige linen sofa for a small living room.")
+        query = st.text_input("Mô tả sản phẩm", value="A women's floral summer dress.")
         submitted = st.form_submit_button("Search", type="primary")
     if submitted:
         if not query.strip():

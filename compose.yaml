@@ -5,7 +5,7 @@ services:
       dockerfile: Dockerfile/Dockerfile
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000
     environment:
-      FAISS_INDEX_PATH: /workspace/artifacts/indexes/lookbench_gallery_hnsw_m16.faiss
+      FAISS_INDEX_PATH: /workspace/artifacts/indexes/lookbench_gallery_hnsw_m32_ef256.faiss
       PRODUCT_CATALOG_PATH: /workspace/data/lookbench/product_catalog.parquet
       DATA_ROOT: /workspace/data
     volumes:

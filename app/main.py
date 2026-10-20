@@ -12,7 +12,7 @@ from app.exceptions import InvalidQueryError, InvalidImageError, IndexTrapError,
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 INDEX_PATH = os.getenv(
     "FAISS_INDEX_PATH",
-    os.path.join(PROJECT_ROOT, "artifacts", "indexes", "lookbench_gallery_hnsw_m16.faiss"),
+    os.path.join(PROJECT_ROOT, "artifacts", "indexes", "lookbench_gallery_hnsw_m32_ef256.faiss"),
 )
 CATALOG_PATH = os.getenv(
     "PRODUCT_CATALOG_PATH",
