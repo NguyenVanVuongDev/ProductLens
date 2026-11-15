@@ -1,21 +1,27 @@
 # Multimodal Visual Retrieval
 
-Đây là **project cá nhân dạng MVP** cho tìm kiếm thời trang text-to-image và image-to-image trên LookBench. API dùng ensemble FashionCLIP (0.7) + ViT-B/32-laion (0.3), embedding 1024 chiều và FAISS HNSW; đây không phải baseline CLIP ViT-B/32 thuần. ABO là domain đồ gia dụng, còn LookBench là benchmark thời trang; không gộp hai domain hoặc suy diễn nhãn benchmark từ metadata sản phẩm.
+Đây là project multimodal visual retrieval với thử nghiệm trên **ABO (đồ gia dụng)** và **LookBench (thời trang)**. Pipeline notebook ABO dùng FashionCLIP (0.7) + ViT-B/32-laion (0.3), embedding 1024 chiều, MURE v6 và FAISS; backend local mặc định hiện vẫn cấu hình cho LookBench. Hai domain được xử lý và báo cáo riêng.
 
 ## Trạng thái dự án
 
-Backend LookBench, Streamlit demo, artifact index/transform và 25 backend tests hiện có. Tuy nhiên, project **chưa hoàn thành toàn bộ Definition of Done của lộ trình 5 ngày**: `data/abo/` đang trống, chưa có loader/embedding/index build CLI độc lập, benchmark reports có số latency/RAM/build-time/ANN recall nhưng các relevance metrics và query counts chưa thống nhất, và Docker chưa được xác minh trên máy sạch. Không nên mô tả hiện trạng là hệ thống ABO hoàn chỉnh hoặc pipeline benchmark tái lập end-to-end.
+Notebook ABO đã chạy pipeline trên Kaggle: làm sạch subset 20,000 ảnh, mã hóa gallery/query, đánh giá held-out và xuất backend/index artifacts. Streamlit/FastAPI local và 25 backend tests cũng có sẵn. Các output dưới đây được ghi trong notebook; chưa được tái chạy trên máy local trong lần cập nhật này. ABO artifacts chưa được đưa vào runtime local mặc định, nên cần dùng package được xuất từ notebook hoặc cấu hình riêng trước khi demo ABO.
 
-Các metric dưới đây là số liệu được ghi trong artifact/config, không phải benchmark vừa chạy lại trong môi trường hiện tại:
+## ABO Results
 
-| Flow (FlatIP, held-out test trong config) | Recall@1 | Recall@5 | Recall@10 | mAP@10 | NDCG@10 |
+Notebook ghi nhận 480 held-out queries trên 8,798 ảnh gallery, với bốn nhóm `cellular_phone_case`, `grocery`, `home`, `shoes` (120 query mỗi nhóm). Trong ablation, MURE v6 cải thiện I2I so với zero-shot ViT-B/32: Recall@1 tăng từ 52.08% lên 78.33%, Recall@10 từ 75.42% lên 93.33%, và mAP@10 từ 50.56% lên 81.56%. T2I Recall@10 tăng từ 82.50% lên 100.00%.
+
+Held-out benchmark tổng hợp trong notebook:
+
+| Flow / Index | Queries | Recall@1 | Recall@5 | Recall@10 | mAP@10 | NDCG@10 |
 |---|---:|---:|---:|---:|---:|
-| Image-to-image | 75.50% | 86.60% | 92.77% | 79.87% | 82.83% |
-| Text-to-image | 90.09% | 92.52% | 94.32% | 76.87% | 81.87% |
+| I2I / FlatIP | 480 | 78.34% | 88.96% | 93.54% | 81.53% | 84.11% |
+| T2I / FlatIP | 480 | 98.96% | 100.00% | 100.00% | 86.12% | 90.73% |
+| I2I / HNSW M32 ef256 | 480 | 78.34% | 88.96% | 93.54% | 81.53% | 84.11% |
+| T2I / HNSW M32 ef256 | 480 | 98.96% | 100.00% | 100.00% | 86.12% | 90.73% |
 
-Có hai discrepancy cần giải quyết trước khi công bố một con số chuẩn: config ghi 469 test queries, trong khi CSV metrics cộng các split thành 468; ngoài ra `day3_faiss_benchmark_full.csv` có relevance scores khác `best_config.json`/`lookbench_unified_all_metrics.csv`. Báo cáo FAISS riêng có ANN Recall@10, latency, RAM và build time, nhưng chưa chứng minh cùng split/config với unified v6 nên không ghép các bảng thành một kết quả duy nhất.
+HNSW M32/ef256 đạt ANN Recall@10 100% so với FlatIP trên benchmark này. Với 13,798 vectors (gallery cộng distractors), notebook ghi p50 32.021 ms I2I / 32.969 ms T2I, so với 117.162 / 118.303 ms của FlatIP; RAM 57.48 MB và build time 3477.83 ms. Thử thêm 5,000 distractors, notebook ghi nhận 0 distractor trong top-10 và ΔRecall@10 = 0.00%.
 
-Ví dụ từ báo cáo FAISS đã lưu: HNSW M32/ef256 đạt ANN Recall@10 99.98%, p50 33.413 ms, p95 37.169 ms, RAM 57.40 MB và build 3567.99 ms; FlatIP ghi p50 124.278 ms, p95 128.202 ms, RAM 53.82 MB và build 53.18 ms. Đây là số liệu trong artifact, chưa được benchmark lại trong phiên này; cần kèm hardware/runtime details để so sánh có thể tái lập.
+Các con số là output notebook đã lưu (PyTorch 2.11.0+cu128, FAISS 1.16.0, CUDA); chúng mô tả lần chạy Kaggle đó. Phần cứng GPU cụ thể không được ghi trong output. Dataset và ABO runtime artifacts chưa nằm trong checkout local này.
 
 ## Cấu trúc runtime
 
@@ -25,9 +31,10 @@ Ví dụ từ báo cáo FAISS đã lưu: HNSW M32/ef256 đạt ANN Recall@10 99.
 - `artifacts/embeddings/transform_pipeline.pkl`: transform bundle v6 dùng chung cho text/image query.
 - `artifacts/embeddings/domain_centering_means.npz`, `dual_ekma_W_QI.npy`, `dual_ekma_W_QT.npy`: transform artifacts dạng NumPy để kiểm tra/tái dựng.
 - `data/lookbench/product_catalog.parquet`: catalog runtime mặc định, ánh xạ FAISS ID sang metadata.
-- `notebooks/da1-day-3-day-4.ipynb`: notebook pipeline và đánh giá hiện có.
+- `notebooks/ABO DA1.ipynb`: chuẩn bị dữ liệu, embedding, ablation và benchmark ABO.
+- `notebooks/da1-day-3-day-4.ipynb`: pipeline LookBench lịch sử; không dùng artifacts của notebook này thay cho ABO.
 
-Index, catalog và transform v6 phải thuộc cùng một lần build trước khi khởi chạy API. API từ chối khởi động nếu transform thiếu/sai dimension hoặc dimension index không khớp; không fallback âm thầm sang embedding raw. Tên index trước đây ghi `m16` dù index thực tế là M32; artifact hiện đã được đổi tên để phản ánh cấu hình bên trong. Docker chỉ đóng gói dịch vụ, không tải dữ liệu hoặc build index trong quá trình startup. Repo hiện chưa có CLI độc lập để tái tạo index từ dữ liệu thô; quy trình tạo artifact vẫn nằm trong notebook. Dữ liệu `data/` và artifact lớn không được đưa vào image.
+Index, catalog và transform phải cùng một lần build. API hiện tại mặc định dùng artifacts LookBench; notebook ABO xuất một bộ ABO riêng ở môi trường Kaggle. Docker chỉ đóng gói dịch vụ, không tải dữ liệu hoặc build index trong startup. Dữ liệu và artifact lớn không được đưa vào image.
 
 ## Chạy local
 
@@ -67,11 +74,11 @@ Demo: `http://localhost:8501`; API: `http://localhost:8000/docs`. Compose mount 
 pytest -q
 ```
 
-Test backend hiện cần catalog/index runtime và model weights sẵn có. Nếu thiếu, API sẽ báo index/catalog không khả dụng; đây không phải một lần benchmark thành công. Chạy notebook theo protocol LookBench để tái lập metric. Báo cáo chỉ nên được công bố cùng split, query/gallery, nhãn relevance, metric, seed, model/config và phần cứng thực sự dùng; không dùng điểm cấu hình làm bằng chứng nếu chưa chạy lại.
+Backend suite chạy với model weights và artifacts tương ứng; lần chạy local gần nhất đạt **25/25 tests**. Notebook ABO ghi nhận **22/22 tests** trong môi trường Kaggle. Khi tái lập benchmark, nên giữ lại split, query/gallery, relevance labels, seed, model/config và thông tin phần cứng cùng kết quả.
 
-## Giới hạn hiện tại
+## Ghi chú triển khai
 
-- Không có script tải ABO/LookBench hoặc build index độc lập trong repo; thư mục `data/abo/` hiện trống. Tuân thủ điều khoản dataset và tự chuẩn bị dữ liệu được phép sử dụng.
-- Catalog LookBench hiện tại không có `title` hoặc `image_path`, nên UI dùng `product_id` làm nhãn. Thumbnail LookBench được đọc từ `gallery.parquet` tương ứng với `subset` và `item_ID`. Với ABO hoặc catalog khác, `image_path` có thể là đường dẫn tương đối bên trong `DATA_ROOT`; endpoint chỉ phục vụ file nằm trong thư mục này.
-- Notebook có outputs và Papermill execution metadata hoàn tất từ 2026-10-17; mình chưa tái chạy/kiểm toán notebook trong lượt này. Cần xác minh môi trường, seed, split, query count (468/469 đang lệch) và đối chiếu các metric giữa reports trước khi công bố một benchmark tái lập. Bộ test và benchmark cần data/model weights thực tế.
-- Docker image build chưa được xác nhận trên máy sạch. Xem [docs/PROJECT_INTERVIEW_GUIDE_VI.md](docs/PROJECT_INTERVIEW_GUIDE_VI.md) để có phần giải thích kiến trúc, metric, trade-off và câu hỏi phỏng vấn.
+- ABO pipeline đã chạy trên Kaggle; dữ liệu không được lưu trong repository. Runtime local mặc định vẫn dùng LookBench, còn demo ABO cần bộ index/catalog/transforms được xuất cùng một lần build.
+- LookBench catalog hiện không có `title` hoặc `image_path`, vì vậy UI dùng `product_id` làm nhãn và lấy thumbnail từ gallery parquet theo `subset`/`item_ID`.
+- Các kết quả ABO trong notebook là output của lần chạy Kaggle đã lưu. Có thể tái chạy trong cùng cấu hình để kiểm tra khả năng tái lập và đóng gói artifacts cho môi trường local.
+- Docker Compose đã có cấu hình API/UI; clean build trên một máy mới là bước xác nhận triển khai tiếp theo.
